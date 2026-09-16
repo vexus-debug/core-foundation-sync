@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -36,13 +36,15 @@ type InvoiceForm = z.infer<typeof invoiceSchema>;
 interface CreateInvoiceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  preselectedPatientId?: string;
+  preselectedTreatmentIds?: string[];
 }
 
 function formatCurrency(amount: number) {
   return `₦${amount.toLocaleString()}`;
 }
 
-export function CreateInvoiceDialog({ open, onOpenChange }: CreateInvoiceDialogProps) {
+export function CreateInvoiceDialog({ open, onOpenChange, preselectedPatientId, preselectedTreatmentIds }: CreateInvoiceDialogProps) {
   const { data: patients = [] } = usePatients();
   const { data: treatments = [] } = useTreatments();
   const createInvoice = useCreateInvoice();
@@ -50,7 +52,7 @@ export function CreateInvoiceDialog({ open, onOpenChange }: CreateInvoiceDialogP
   const form = useForm<InvoiceForm>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
-      patientId: "",
+      patientId: preselectedPatientId || "",
       lineItems: [{ treatmentId: "", quantity: 1 }],
       discount: 0,
       paymentMethod: "",
@@ -62,6 +64,21 @@ export function CreateInvoiceDialog({ open, onOpenChange }: CreateInvoiceDialogP
     control: form.control,
     name: "lineItems",
   });
+
+  // Carry the patient and the treatment already chosen elsewhere into this invoice
+  useEffect(() => {
+    if (!open) return;
+    form.reset({
+      patientId: preselectedPatientId || "",
+      lineItems: preselectedTreatmentIds?.length
+        ? preselectedTreatmentIds.map((id) => ({ treatmentId: id, quantity: 1 }))
+        : [{ treatmentId: "", quantity: 1 }],
+      discount: 0,
+      paymentMethod: "",
+      amountPaid: 0,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, preselectedPatientId, JSON.stringify(preselectedTreatmentIds || [])]);
 
   const watchedItems = form.watch("lineItems");
   const watchedDiscount = form.watch("discount") || 0;

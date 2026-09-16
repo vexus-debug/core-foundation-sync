@@ -64,7 +64,7 @@ export function useAddToWaitingList() {
 export function useUpdateWaitingStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, status, chair }: { id: string; status: string; chair?: string }) => {
+    mutationFn: async ({ id, status, chair, appointment_id }: { id: string; status: string; chair?: string; appointment_id?: string | null }) => {
       const updates: any = { status };
       if (status === "called") updates.called_time = new Date().toISOString();
       if (status === "in_progress") updates.seen_time = new Date().toISOString();
@@ -72,9 +72,18 @@ export function useUpdateWaitingStatus() {
       if (chair) updates.chair = chair;
       const { error } = await (supabase as any).from("waiting_list").update(updates).eq("id", id);
       if (error) throw error;
+
+      // Keep the linked appointment in sync so reception never logs arrival twice
+      if (appointment_id) {
+        const apptStatus = status === "in_progress" ? "in-progress" : status === "completed" ? "completed" : null;
+        if (apptStatus) {
+          await (supabase as any).from("appointments").update({ status: apptStatus }).eq("id", appointment_id);
+        }
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["waiting-list"] });
+      qc.invalidateQueries({ queryKey: ["appointments"] });
       toast({ title: "Queue updated" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
